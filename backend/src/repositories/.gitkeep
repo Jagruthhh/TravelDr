@@ -1,0 +1,4 @@
+/**
+ * src/repositories — home for repository interfaces and their Prisma implementations.
+ * Controllers never import from here directly; only services depend on repository interfaces.
+ */

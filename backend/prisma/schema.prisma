@@ -1,0 +1,608 @@
+// ─── Generator & Datasource ───────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+/// Matches domain UserRole enum exactly.
+enum UserRole {
+  TRAVELER
+  HELPLINE_AGENT
+  PROVIDER_STAFF
+  ADMIN
+}
+
+/// Mirrors VerificationStatus domain enum.
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+/// Discriminator for the HealthcareProvider hierarchy.
+enum ProviderType {
+  HOSPITAL
+  CLINIC
+  DOCTOR
+}
+
+/// Mirrors AppointmentStatus domain enum.
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+/// Mirrors HelplineUrgency domain enum.
+enum HelplineUrgency {
+  EMERGENCY
+  URGENT
+  ROUTINE
+}
+
+/// Mirrors HelplineCasePriority domain enum.
+enum HelplineCasePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+/// Mirrors HelplineCaseStatus domain enum.
+enum HelplineCaseStatus {
+  NEW
+  OPEN
+  ASSIGNED
+  RECOMMENDED
+  IN_ASSISTANCE
+  RESOLVED
+  CLOSED
+}
+
+/// Three-letter ISO 4217 currency codes supported by PriceEntry.
+enum Currency {
+  USD
+  EUR
+  GBP
+  JPY
+  INR
+  THB
+}
+
+// ─── Location & Catalog ───────────────────────────────────────────────────────
+
+/// Represents a destination city where TravelDoc operates.
+/// Stores local emergency dispatch numbers that travelers need on arrival.
+model City {
+  id          String  @id @default(uuid())
+  name        String
+  countryCode String  @db.Char(2)          // ISO 3166-1 alpha-2
+  countryName String
+  timezone    String                        // IANA tz identifier, e.g. "Asia/Bangkok"
+  isActive    Boolean @default(true)
+
+  // Emergency contact numbers stored as flat columns for fast reads.
+  emergencyAmbulance       String
+  emergencyPolice          String
+  emergencyGeneral         String?
+
+  // Optional geographic centre of the city.
+  latitude    Float?
+  longitude   Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  providers      HealthcareProvider[]
+  helplineCases  HelplineCase[]
+
+  @@index([name])
+  @@index([countryCode])
+  @@map("cities")
+}
+
+/// ISO 639-1 language registry used for traveler <-> doctor matching.
+model Language {
+  id         String  @id @default(uuid())
+  code       String  @unique @db.VarChar(10) // e.g. "en", "th", "ja"
+  name       String                           // English name
+  nativeName String                           // Native script name
+  isRtl      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  // Join table relations
+  travelerLanguages  TravelerLanguage[]
+  providerLanguages  ProviderLanguage[]
+  agentLanguages     AgentLanguage[]
+
+  @@index([name])
+  @@index([code])
+  @@map("languages")
+}
+
+/// Medical specialties - e.g. General Practice, Cardiology, Pediatrics.
+model Specialty {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String
+  iconName    String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  treatments          Treatment[]
+  providerSpecialties ProviderSpecialty[]
+
+  @@index([name])
+  @@map("specialties")
+}
+
+/// Standard clinical procedures and consultations - the line items for transparent pricing.
+model Treatment {
+  id                      String  @id @default(uuid())
+  name                    String
+  description             String
+  standardDurationMinutes Int     @default(30)
+  isActive                Boolean @default(true)
+
+  specialtyId String
+  specialty   Specialty @relation(fields: [specialtyId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  priceEntries PriceEntry[]
+  appointments Appointment[]
+
+  @@index([specialtyId])
+  @@map("treatments")
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+/// Base user account shared across all roles.
+/// Role-specific data lives in the corresponding profile table.
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  fullName    String
+  phoneNumber String
+  role        UserRole
+  isActive    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Exactly one profile row exists per role; others are null.
+  travelerProfile      Traveler?
+  helplineAgentProfile HelplineAgent?
+  providerStaffProfile ProviderStaff?
+  adminProfile         Admin?
+
+  @@map("users")
+}
+
+/// Traveler profile - international visitors seeking medical care.
+model Traveler {
+  id          String @id @default(uuid())
+  homeCountry String
+
+  // Emergency contact stored as three flat columns (avoid over-normalising a rarely-queried triplet).
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  preferredLanguages TravelerLanguage[]
+  appointments       Appointment[]
+  reviews            Review[]
+  helplineCases      HelplineCase[]
+
+  @@map("travelers")
+}
+
+/// Join table for Traveler <-> Language (many-to-many).
+model TravelerLanguage {
+  travelerId String
+  languageId String
+  traveler   Traveler @relation(fields: [travelerId], references: [id], onDelete: Cascade)
+  language   Language @relation(fields: [languageId], references: [id])
+
+  @@id([travelerId, languageId])
+  @@index([languageId])
+  @@index([travelerId])
+  @@map("traveler_languages")
+}
+
+/// HelplineAgent profile - emergency support operators.
+model HelplineAgent {
+  id                 String  @id @default(uuid())
+  isAvailableForDuty Boolean @default(true)
+  currentActiveCases Int     @default(0)
+  maxConcurrentCases Int     @default(5)
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  spokenLanguages AgentLanguage[]
+  assignedCases   HelplineCase[]  @relation("AgentCases")
+  messages        Message[]
+
+  @@map("helpline_agents")
+}
+
+/// Join table for HelplineAgent <-> Language (many-to-many).
+model AgentLanguage {
+  agentId    String
+  languageId String
+  agent      HelplineAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  language   Language      @relation(fields: [languageId], references: [id])
+
+  @@id([agentId, languageId])
+  @@index([languageId])
+  @@index([agentId])
+  @@map("agent_languages")
+}
+
+/// ProviderStaff profile - administrative personnel at a medical facility.
+model ProviderStaff {
+  id               String  @id @default(uuid())
+  facilityRole     String
+  isPrimaryContact Boolean @default(false)
+
+  userId     String @unique
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId String
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerId])
+  @@map("provider_staff")
+}
+
+/// Admin profile - platform administrators managing verification and catalog.
+model Admin {
+  id           String   @id @default(uuid())
+  department   String
+  isSuperAdmin Boolean  @default(false)
+  permissions  String[]             // Array of permission strings; evaluated in the application layer.
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  verificationRecords VerificationRecord[]
+
+  @@map("admins")
+}
+
+// ─── Healthcare Providers ─────────────────────────────────────────────────────
+
+/// Polymorphic base table for Hospital, Clinic, and Doctor.
+/// The `type` discriminator determines which detail table holds the extra columns.
+model HealthcareProvider {
+  id            String       @id @default(uuid())
+  name          String
+  type          ProviderType
+  address       String
+  contactNumber String
+  email         String
+  websiteUrl    String?
+  averageRating Float        @default(0)
+  totalReviews  Int          @default(0)
+  isActive      Boolean      @default(true)
+
+  cityId String
+  city   City   @relation(fields: [cityId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Type-specific detail rows; exactly one is non-null at a time.
+  hospitalDetail HospitalDetail?
+  clinicDetail   ClinicDetail?
+  doctorDetail   DoctorDetail?
+
+  // Cross-cutting relations
+  spokenLanguages            ProviderLanguage[]
+  specialties                ProviderSpecialty[]
+  verificationRecord         VerificationRecord?
+  priceEntries               PriceEntry[]
+  appointments               Appointment[]
+  reviews                    Review[]
+  staff                      ProviderStaff[]
+  affiliatedDoctors          DoctorDetail[]       @relation("DoctorParentProvider")
+  recommendedInHelplineCases HelplineCase[]       @relation("RecommendedProvider")
+
+  @@index([cityId])
+  @@index([type])
+  @@index([isActive])
+  @@map("healthcare_providers")
+}
+
+/// Extra columns specific to Hospital providers.
+model HospitalDetail {
+  id                        String  @id @default(uuid())
+  emergencyDepartment24x7   Boolean @default(true)
+  totalInpatientBeds        Int     @default(50)
+  traumaLevel               String?
+  ambulanceServiceAvailable Boolean @default(true)
+
+  providerId String             @unique
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("hospital_details")
+}
+
+/// Extra columns specific to Clinic providers.
+model ClinicDetail {
+  id                        String  @id @default(uuid())
+  allowsWalkIns             Boolean @default(true)
+  appointmentRequired       Boolean @default(false)
+  operatingHoursDescription String  @default("09:00 - 18:00")
+  offersTelehealth          Boolean @default(false)
+
+  providerId String             @unique
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("clinic_details")
+}
+
+/// Extra columns specific to Doctor providers.
+/// medicalLicenseNumber must be unique across the platform.
+/// Doctor can belong to a parent provider (Hospital or Clinic).
+model DoctorDetail {
+  id                    String  @id @default(uuid())
+  medicalLicenseNumber  String  @unique
+  yearsOfExperience     Int     @default(0)
+  professionalTitle     String  @default("Dr.")
+  acceptsEmergencyCalls Boolean @default(false)
+
+  // Affiliation with parent provider (Hospital or Clinic).
+  affiliatedFacilityId String?
+  parentProvider       HealthcareProvider? @relation("DoctorParentProvider", fields: [affiliatedFacilityId], references: [id])
+
+  providerId String             @unique
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([affiliatedFacilityId])
+  @@map("doctor_details")
+}
+
+/// Join table for HealthcareProvider <-> Language (many-to-many).
+model ProviderLanguage {
+  providerId String
+  languageId String
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  language   Language           @relation(fields: [languageId], references: [id])
+
+  @@id([providerId, languageId])
+  @@index([languageId])
+  @@index([providerId])
+  @@map("provider_languages")
+}
+
+/// Join table for HealthcareProvider <-> Specialty (many-to-many).
+model ProviderSpecialty {
+  providerId  String
+  specialtyId String
+  provider    HealthcareProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  specialty   Specialty          @relation(fields: [specialtyId], references: [id])
+
+  @@id([providerId, specialtyId])
+  @@index([specialtyId])
+  @@index([providerId])
+  @@map("provider_specialties")
+}
+
+// ─── Verification & Transparent Pricing ──────────────────────────────────────
+
+/// Credential verification lifecycle for every healthcare provider.
+/// One-to-one with HealthcareProvider; an Admin signs off via verifiedByAdmin.
+model VerificationRecord {
+  id                 String             @id @default(uuid())
+  status             VerificationStatus @default(PENDING)
+  licenseDocumentUrl String
+  notes              String             @default("")
+  verifiedAt         DateTime?
+  expiresAt          DateTime?
+
+  providerId String             @unique
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  verifiedByAdminId String?
+  verifiedByAdmin   Admin?  @relation(fields: [verifiedByAdminId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("verification_records")
+}
+
+/// Transparent medical cost entry per provider + treatment combination.
+/// Supports both fixed prices and estimated price ranges (minAmount/maxAmount).
+model PriceEntry {
+  id                  String    @id @default(uuid())
+  amount              Float
+  currency            Currency
+  isEstimate          Boolean   @default(false)
+  minAmount           Float?    // Only populated when isEstimate = true
+  maxAmount           Float?    // Only populated when isEstimate = true
+  notes               String    @default("")
+  includesMedicine    Boolean   @default(false)
+  includesFacilityFee Boolean   @default(true)
+  effectiveFrom       DateTime  @default(now())
+  effectiveUntil      DateTime?
+
+  providerId String
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  treatmentId String
+  treatment   Treatment @relation(fields: [treatmentId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([providerId])
+  @@index([treatmentId])
+  @@map("price_entries")
+}
+
+// ─── Appointments ─────────────────────────────────────────────────────────────
+
+/// A consultation booking between a traveler and a healthcare provider.
+/// Records the agreed transparent cost and language preference at booking time.
+model Appointment {
+  id                    String            @id @default(uuid())
+  scheduledAt           DateTime
+  status                AppointmentStatus @default(REQUESTED)
+  agreedPrice           Float
+  currency              Currency
+  preferredLanguageCode String            @db.VarChar(10)
+  symptomsDescription   String
+  cancellationReason    String?
+  completedAt           DateTime?
+
+  travelerId String
+  traveler   Traveler @relation(fields: [travelerId], references: [id])
+
+  providerId String
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id])
+
+  // Optional link to a standard treatment from the catalog.
+  treatmentId String?
+  treatment   Treatment? @relation(fields: [treatmentId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  review Review?
+
+  @@index([travelerId])
+  @@index([providerId])
+  @@index([status])
+  @@index([preferredLanguageCode])
+  @@map("appointments")
+}
+
+// ─── Reviews ──────────────────────────────────────────────────────────────────
+
+/// Traveler feedback and star rating for a healthcare provider.
+/// isVerifiedPatient is automatically set to true when tied to a completed appointment.
+model Review {
+  id                String  @id @default(uuid())
+  rating            Int     // 1-5 stars; validated in the application layer
+  comment           String
+  languageUsed      String  @db.VarChar(10)
+  isVerifiedPatient Boolean @default(false)
+
+  travelerId String
+  traveler   Traveler @relation(fields: [travelerId], references: [id])
+
+  providerId String
+  provider   HealthcareProvider @relation(fields: [providerId], references: [id])
+
+  // One review per appointment (optional link enforces uniqueness per visit).
+  appointmentId String?      @unique
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([providerId])
+  @@index([travelerId])
+  @@map("reviews")
+}
+
+// ─── Helpline Fallback ────────────────────────────────────────────────────────
+
+/// Emergency or concierge-support case opened when a traveler cannot self-serve.
+/// Routes to a language-compatible agent and tracks escalation + resolution.
+model HelplineCase {
+  id                    String               @id @default(uuid())
+  subject               String
+  initialDescription    String
+  preferredLanguageCode String               @db.VarChar(10)
+  urgency               HelplineUrgency      @default(ROUTINE)
+  status                HelplineCaseStatus   @default(NEW)
+  priority              HelplineCasePriority @default(MEDIUM)
+  recommendationNotes   String?
+  resolutionSummary     String?
+  resolvedAt            DateTime?
+
+  travelerId String
+  traveler   Traveler @relation(fields: [travelerId], references: [id])
+
+  cityId String
+  city   City   @relation(fields: [cityId], references: [id])
+
+  // Populated after NEW -> ASSIGNED transition.
+  agentId String?
+  agent   HelplineAgent? @relation("AgentCases", fields: [agentId], references: [id])
+
+  // Optional recommendation of a healthcare provider.
+  recommendedProviderId String?
+  recommendedProvider   HealthcareProvider? @relation("RecommendedProvider", fields: [recommendedProviderId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@index([cityId])
+  @@index([preferredLanguageCode])
+  @@index([status])
+  @@index([urgency])
+  @@index([travelerId])
+  @@index([agentId])
+  @@map("helpline_cases")
+}
+
+/// Individual message or internal operator note within a HelplineCase.
+model Message {
+  id             String   @id @default(uuid())
+  content        String
+  isInternalNote Boolean  @default(false) // true = visible to helpline agents only
+  attachments    String[]                  // Array of file/image URLs
+
+  caseId String
+  case   HelplineCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Sender identity stored as raw strings because sender can be either a
+  // traveler or an agent -- resolved by the service layer via `senderId`.
+  senderId   String
+  senderName String
+
+  // Typed FK to the agent when sender is a HelplineAgent.
+  agentId String?
+  agent   HelplineAgent? @relation(fields: [agentId], references: [id])
+
+  sentAt DateTime @default(now())
+
+  @@index([caseId])
+  @@map("messages")
+}

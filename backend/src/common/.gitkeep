@@ -1,0 +1,4 @@
+/**
+ * src/common — shared utilities, decorators, filters, guards, interceptors, and DTOs
+ * that are used across multiple modules.
+ */

@@ -1,0 +1,4 @@
+/**
+ * src/services — home for NestJS service classes (application/business logic layer).
+ * Services are injected into controllers and depend on repository interfaces, never on Prisma directly.
+ */
