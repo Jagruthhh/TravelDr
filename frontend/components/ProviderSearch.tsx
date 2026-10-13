@@ -46,7 +46,7 @@ export default function ProviderSearch({
   initialCity = '',
   initialLanguage = '',
   initialSpecialty = '',
-  initialVerifiedOnly = false,
+  initialVerifiedOnly = true,
 }: ProviderSearchProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -109,7 +109,9 @@ export default function ProviderSearch({
       if (city) params.set('city', city);
       if (language) params.set('language', language);
       if (specialty) params.set('specialty', specialty);
-      if (verifiedOnly) params.set('verifiedOnly', 'true');
+      if (!verifiedOnly) {
+        params.set('verifiedOnly', 'false');
+      }
 
       const queryStr = params.toString();
       const targetUrl = queryStr ? `/providers?${queryStr}` : '/providers';
@@ -124,7 +126,7 @@ export default function ProviderSearch({
     setCity('');
     setLanguage('');
     setSpecialty('');
-    setVerifiedOnly(false);
+    setVerifiedOnly(true);
   };
 
   const hasActiveFilters = Boolean(city || language || specialty || verifiedOnly);
@@ -570,7 +572,7 @@ export default function ProviderSearch({
               <div className="flex justify-between">
                 <span className="text-slate-500">Verification:</span>
                 <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                  {selectedProvider.isVerified ? 'Official Verified Partner' : 'Verification In Review'}
+                  {selectedProvider.isVerified ? 'Official Verified Partner' : 'Verification pending'}
                 </span>
               </div>
               <div className="flex justify-between">

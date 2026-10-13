@@ -114,6 +114,67 @@ function getCurrencySymbol(code?: string | null): string {
   }
 }
 
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  hi: 'Hindi',
+  te: 'Telugu',
+  kok: 'Konkani',
+  ru: 'Russian',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+};
+
+const SPECIALTY_NAMES: Record<string, string> = {
+  // Database seeded UUIDs
+  'd7449fff-9c92-4b91-8291-8cb4bff3628d': 'Dermatology',
+  '244a8c79-2ffb-4161-acd0-fdc93968527a': 'General Practice',
+  'e7ed77e7-faf4-4921-b618-7160b5247bc9': 'Emergency Medicine',
+  '7bf54685-845b-4890-9ad0-79ff0eada55b': 'Pediatrics',
+  'fd249942-b6dd-4b42-acff-b9174418e089': 'Orthopedics',
+  'c13089d4-947f-4ac0-957b-6947c50ea039': 'Cardiology',
+  '53c8b4e3-e1d8-4570-9552-c479f6c64dfd': 'Ophthalmology',
+  'e61f5d5a-5bb9-41b8-b130-423cc68f0b9f': 'Dentistry',
+
+  // Static/Frontend catalog IDs
+  '0c400d27-27cd-451d-bf74-2f846f36899a': 'Dermatology',
+  'ae4f3927-d837-45fc-a9b6-ef2c73611e30': 'General Practice',
+  '19014e36-f8ca-4359-8ded-8ac7ee12f7c7': 'Emergency Medicine',
+  'd1fc44fe-fcce-4381-812b-6e6e43041eb4': 'Pediatrics',
+  '140eb201-0f33-428b-a724-7da6e13504c7': 'Orthopedics',
+  '43e715f0-9089-4464-b590-2c3373ac2d16': 'Cardiology',
+  '8b66575b-aae9-4c56-a7a4-64796cf486b8': 'Ophthalmology',
+  '82364b4c-900f-445e-8840-fe9611adc78d': 'Dentistry',
+
+  // Slug / test IDs
+  'spec-derm': 'Dermatology',
+  'spec-gp': 'General Practice',
+  'spec-er': 'Emergency Medicine',
+  'spec-pediatrics': 'Pediatrics',
+  'spec-ortho': 'Orthopedics',
+  'spec-cardio': 'Cardiology',
+  'spec-ophthalmology': 'Ophthalmology',
+  'spec-dentistry': 'Dentistry',
+};
+
+export function formatLanguageName(code: string): string {
+  if (!code) return '';
+  const lower = code.toLowerCase().trim();
+  return LANGUAGE_NAMES[lower] || code;
+}
+
+export function formatSpecialtyName(idOrName: string): string {
+  if (!idOrName) return '';
+  if (SPECIALTY_NAMES[idOrName]) {
+    return SPECIALTY_NAMES[idOrName];
+  }
+  // If it's an unmapped UUID, fallback to a friendly title to prevent raw UUID display
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrName)) {
+    return 'Specialist Care';
+  }
+  return idOrName;
+}
+
 /**
  * Modern, responsive ProviderCard component.
  * Displays verified status badge, spoken languages, proximity distance, and cost range.
@@ -296,7 +357,7 @@ export default function ProviderCard(props: ProviderCardProps) {
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
               </svg>
-              <span>Pending</span>
+              <span>Verification pending</span>
             </span>
           )}
         </div>
@@ -348,7 +409,7 @@ export default function ProviderCard(props: ProviderCardProps) {
                 key={spec}
                 className="inline-flex rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200/60 dark:bg-slate-800/60 dark:text-slate-400 dark:ring-slate-700/60"
               >
-                {spec}
+                {formatSpecialtyName(spec)}
               </span>
             ))}
             {specialties.length > 3 && (
@@ -393,7 +454,7 @@ export default function ProviderCard(props: ProviderCardProps) {
                 key={lang}
                 className="inline-flex items-center rounded-md bg-teal-50/70 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-950/40 dark:text-teal-300"
               >
-                {lang}
+                {formatLanguageName(lang)}
               </span>
             ))}
             {spokenLanguages.length > 4 && (

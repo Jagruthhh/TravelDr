@@ -49,6 +49,17 @@ const LANGUAGE_META: Record<
 };
 
 const SPECIALTY_META: Record<string, string> = {
+  // Database seeded UUIDs
+  'd7449fff-9c92-4b91-8291-8cb4bff3628d': 'Dermatology',
+  '244a8c79-2ffb-4161-acd0-fdc93968527a': 'General Practice',
+  'e7ed77e7-faf4-4921-b618-7160b5247bc9': 'Emergency Medicine',
+  '7bf54685-845b-4890-9ad0-79ff0eada55b': 'Pediatrics',
+  'fd249942-b6dd-4b42-acff-b9174418e089': 'Orthopedics',
+  'c13089d4-947f-4ac0-957b-6947c50ea039': 'Cardiology',
+  '53c8b4e3-e1d8-4570-9552-c479f6c64dfd': 'Ophthalmology',
+  'e61f5d5a-5bb9-41b8-b130-423cc68f0b9f': 'Dentistry',
+
+  // Static/Frontend catalog IDs
   '0c400d27-27cd-451d-bf74-2f846f36899a': 'Dermatology & Skin Disorders',
   'ae4f3927-d837-45fc-a9b6-ef2c73611e30': 'General Practice / Family Medicine',
   '19014e36-f8ca-4359-8ded-8ac7ee12f7c7': 'Emergency Medicine & Acute Care',
@@ -57,7 +68,26 @@ const SPECIALTY_META: Record<string, string> = {
   '43e715f0-9089-4464-b590-2c3373ac2d16': 'Cardiology & Heart Care',
   '8b66575b-aae9-4c56-a7a4-64796cf486b8': 'Ophthalmology',
   '82364b4c-900f-445e-8840-fe9611adc78d': 'Dentistry & Oral Health',
+
+  // Slug / test IDs
+  'spec-derm': 'Dermatology',
+  'spec-gp': 'General Practice',
+  'spec-er': 'Emergency Medicine',
+  'spec-pediatrics': 'Pediatrics',
+  'spec-ortho': 'Orthopedics',
+  'spec-cardio': 'Cardiology',
+  'spec-ophthalmology': 'Ophthalmology',
+  'spec-dentistry': 'Dentistry',
 };
+
+function formatSpecialtyLabel(specId: string): string {
+  if (!specId) return '';
+  if (SPECIALTY_META[specId]) return SPECIALTY_META[specId];
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(specId)) {
+    return 'Specialist Care';
+  }
+  return specId;
+}
 
 // Realistic mock reviews representing verified international traveler feedback
 const MOCK_REVIEWS = [
@@ -294,7 +324,7 @@ export default function ProviderDetail({
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                  Verification Pending
+                  Verification pending
                 </span>
               )}
 
@@ -340,7 +370,7 @@ export default function ProviderDetail({
             {provider.specialties && provider.specialties.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {provider.specialties.map((specId) => {
-                  const label = SPECIALTY_META[specId] || specId;
+                  const label = formatSpecialtyLabel(specId);
                   return (
                     <span
                       key={specId}
@@ -508,7 +538,7 @@ export default function ProviderDetail({
               {provider.spokenLanguages && provider.spokenLanguages.length > 0 ? (
                 provider.spokenLanguages.map((code) => {
                   const meta = LANGUAGE_META[code.toLowerCase()] || {
-                    label: code.toUpperCase(),
+                    label: code.length <= 3 ? 'Multilingual' : code,
                     native: code,
                     flag: '🌐',
                   };
