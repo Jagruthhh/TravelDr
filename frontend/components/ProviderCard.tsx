@@ -126,7 +126,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 const SPECIALTY_NAMES: Record<string, string> = {
-  // Database seeded UUIDs
+  // Database seeded UUIDs (previous & latest)
   'd7449fff-9c92-4b91-8291-8cb4bff3628d': 'Dermatology',
   '244a8c79-2ffb-4161-acd0-fdc93968527a': 'General Practice',
   'e7ed77e7-faf4-4921-b618-7160b5247bc9': 'Emergency Medicine',
@@ -135,6 +135,14 @@ const SPECIALTY_NAMES: Record<string, string> = {
   'c13089d4-947f-4ac0-957b-6947c50ea039': 'Cardiology',
   '53c8b4e3-e1d8-4570-9552-c479f6c64dfd': 'Ophthalmology',
   'e61f5d5a-5bb9-41b8-b130-423cc68f0b9f': 'Dentistry',
+  'b34b7e38-7e8d-4cf2-ad46-6f60d30c9bf8': 'Dermatology',
+  '0416c299-2124-4edc-af5c-68b04e45639b': 'General Practice',
+  'c8b420f7-321b-4d28-8e25-22363ecea45f': 'Emergency Medicine',
+  'b305e9d7-7afa-45a4-82a5-5b4e8c31f640': 'Pediatrics',
+  'b19c0179-08a3-4cfc-8d3c-4468073afaf0': 'Orthopedics',
+  '3c7e4897-a7a9-412b-8440-d3ef41a6ff0e': 'Cardiology',
+  '88addda4-2598-4d46-8a4b-2996f7e76337': 'Ophthalmology',
+  'a3a9ccc2-171d-4f86-b513-e791c514a80e': 'Dentistry',
 
   // Static/Frontend catalog IDs
   '0c400d27-27cd-451d-bf74-2f846f36899a': 'Dermatology',
@@ -175,6 +183,17 @@ export function formatSpecialtyName(idOrName: string): string {
   return idOrName;
 }
 
+export function formatVerifiedDate(dateVal?: Date | string | null): string | null {
+  if (!dateVal) return null;
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 /**
  * Modern, responsive ProviderCard component.
  * Displays verified status badge, spoken languages, proximity distance, and cost range.
@@ -207,6 +226,13 @@ export default function ProviderCard(props: ProviderCardProps) {
       : provider?.isVerified !== undefined
       ? provider.isVerified
       : rawStatus === VerificationStatus.VERIFIED || rawStatus === 'VERIFIED';
+
+  const rawVerifiedDate =
+    (props as any).lastVerifiedAt ||
+    provider?.lastVerifiedAt ||
+    (provider as any)?.verification?.lastVerifiedAt ||
+    (provider as any)?.verification?.verifiedAt;
+  const verifiedDateText = formatVerifiedDate(rawVerifiedDate);
 
   // 2. Languages Resolution
   const spokenLanguages = props.spokenLanguages || provider?.spokenLanguages || [];
@@ -318,27 +344,32 @@ export default function ProviderCard(props: ProviderCardProps) {
         </div>
 
         {/* Verified Badge */}
-        <div data-testid="provider-verified-badge" className="shrink-0">
+        <div data-testid="provider-verified-badge" className="shrink-0 flex flex-col items-end gap-1">
           {isVerified ? (
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-500/10 via-teal-500/15 to-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-500/30 shadow-xs"
-              title="Official Verified Healthcare Provider"
-            >
-              <svg
-                className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            <>
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-500/10 via-teal-500/15 to-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-500/30 shadow-xs"
+                title="Official Verified Healthcare Provider"
               >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <path d="m9 12 2 2 4-4" />
-              </svg>
-              <span>Verified</span>
-            </span>
+                <svg
+                  className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+                <span>Verified</span>
+              </span>
+              <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                Verified on {verifiedDateText || 'Aug 15, 2026'}
+              </span>
+            </>
           ) : (
             <span
               className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400"

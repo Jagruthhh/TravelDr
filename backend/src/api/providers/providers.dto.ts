@@ -125,6 +125,21 @@ export interface ProviderResponseDto {
   specialties: string[];
   isVerified: boolean;
   verificationStatus: string;
+  registrationNumber?: string;
+  issuingCouncil?: string;
+  lastVerifiedAt?: Date | string;
+  verifiedBy?: string;
+  verificationNotes?: string;
+  verification?: {
+    status: string;
+    registrationNumber?: string;
+    issuingCouncil?: string;
+    lastVerifiedAt?: Date | string;
+    verifiedBy?: string;
+    verificationNotes?: string;
+    verifiedAt?: Date | string;
+    expiresAt?: Date | string;
+  };
   averageRating: number;
   totalReviews: number;
   isActive: boolean;

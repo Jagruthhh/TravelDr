@@ -165,6 +165,21 @@ export interface Provider {
   specialties: string[];
   isVerified: boolean;
   verificationStatus: VerificationStatus | string;
+  registrationNumber?: string;
+  issuingCouncil?: string;
+  lastVerifiedAt?: Date | string;
+  verifiedBy?: string;
+  verificationNotes?: string;
+  verification?: {
+    status: VerificationStatus | string;
+    registrationNumber?: string;
+    issuingCouncil?: string;
+    lastVerifiedAt?: Date | string;
+    verifiedBy?: string;
+    verificationNotes?: string;
+    verifiedAt?: Date | string;
+    expiresAt?: Date | string;
+  };
   averageRating: number;
   totalReviews: number;
   isActive: boolean;

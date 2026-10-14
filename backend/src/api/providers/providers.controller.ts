@@ -238,6 +238,23 @@ export class ProvidersController {
       specialties: provider.getSpecialtyIds(),
       isVerified: provider.isVerified(),
       verificationStatus: provider.getVerificationStatus(),
+      registrationNumber: provider.getVerificationRecord()?.getRegistrationNumber(),
+      issuingCouncil: provider.getVerificationRecord()?.getIssuingCouncil(),
+      lastVerifiedAt: provider.getVerificationRecord()?.getLastVerifiedAt(),
+      verifiedBy: provider.getVerificationRecord()?.getVerifiedBy(),
+      verificationNotes: provider.getVerificationRecord()?.getVerificationNotes(),
+      verification: provider.getVerificationRecord()
+        ? {
+            status: provider.getVerificationRecord()!.getStatus(),
+            registrationNumber: provider.getVerificationRecord()!.getRegistrationNumber(),
+            issuingCouncil: provider.getVerificationRecord()!.getIssuingCouncil(),
+            lastVerifiedAt: provider.getVerificationRecord()!.getLastVerifiedAt(),
+            verifiedBy: provider.getVerificationRecord()!.getVerifiedBy(),
+            verificationNotes: provider.getVerificationRecord()!.getVerificationNotes(),
+            verifiedAt: provider.getVerificationRecord()!.getVerifiedAt(),
+            expiresAt: provider.getVerificationRecord()!.getExpiresAt(),
+          }
+        : undefined,
       averageRating: provider.getAverageRating(),
       totalReviews: provider.getTotalReviews(),
       isActive: provider.getIsActive(),

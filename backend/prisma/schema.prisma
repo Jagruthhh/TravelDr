@@ -429,6 +429,11 @@ model VerificationRecord {
   status             VerificationStatus @default(PENDING)
   licenseDocumentUrl String
   notes              String             @default("")
+  registrationNumber String?
+  issuingCouncil     String?
+  lastVerifiedAt     DateTime?
+  verifiedBy         String?
+  verificationNotes  String?
   verifiedAt         DateTime?
   expiresAt          DateTime?
 

@@ -14,6 +14,12 @@ export class VerificationRecord {
   private verifiedAt?: Date;
   private expiresAt?: Date;
 
+  private registrationNumber?: string;
+  private issuingCouncil?: string;
+  private lastVerifiedAt?: Date;
+  private verifiedBy?: string;
+  private verificationNotes?: string;
+
   constructor(params: {
     id: string;
     providerId: string;
@@ -21,6 +27,11 @@ export class VerificationRecord {
     status?: VerificationStatus;
     verifiedByAdminId?: string;
     notes?: string;
+    registrationNumber?: string;
+    issuingCouncil?: string;
+    lastVerifiedAt?: Date;
+    verifiedBy?: string;
+    verificationNotes?: string;
     verifiedAt?: Date;
     expiresAt?: Date;
   }) {
@@ -40,6 +51,11 @@ export class VerificationRecord {
     this.status = params.status ?? VerificationStatus.PENDING;
     this.verifiedByAdminId = params.verifiedByAdminId;
     this.notes = params.notes?.trim() ?? '';
+    this.registrationNumber = params.registrationNumber?.trim();
+    this.issuingCouncil = params.issuingCouncil?.trim();
+    this.lastVerifiedAt = params.lastVerifiedAt ?? params.verifiedAt;
+    this.verifiedBy = params.verifiedBy?.trim();
+    this.verificationNotes = params.verificationNotes?.trim() ?? params.notes?.trim();
     this.verifiedAt = params.verifiedAt;
     this.expiresAt = params.expiresAt;
   }
@@ -66,6 +82,26 @@ export class VerificationRecord {
 
   public getNotes(): string {
     return this.notes;
+  }
+
+  public getRegistrationNumber(): string | undefined {
+    return this.registrationNumber;
+  }
+
+  public getIssuingCouncil(): string | undefined {
+    return this.issuingCouncil;
+  }
+
+  public getLastVerifiedAt(): Date | undefined {
+    return this.lastVerifiedAt ?? this.verifiedAt;
+  }
+
+  public getVerifiedBy(): string | undefined {
+    return this.verifiedBy;
+  }
+
+  public getVerificationNotes(): string | undefined {
+    return this.verificationNotes ?? this.notes;
   }
 
   public getVerifiedAt(): Date | undefined {
