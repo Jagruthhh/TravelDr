@@ -50,6 +50,14 @@ const LANGUAGE_META: Record<
 
 const SPECIALTY_META: Record<string, string> = {
   // Database seeded UUIDs (previous & latest)
+  '886ac41a-32c3-46a7-ac20-965b7be37584': 'Dermatology',
+  'fe01e2b8-d77e-4d93-961e-de8e765f8630': 'General Practice',
+  '674f177b-8240-410e-ab8c-168f403a36f3': 'Emergency Medicine',
+  '09f9d16c-a7f0-4313-ad1e-9779cfb90909': 'Pediatrics',
+  '63d2ce31-f171-48f4-bde8-ab2f16a93c4a': 'Orthopedics',
+  'fc42e6f0-1b84-4f22-b9ee-50192090254f': 'Cardiology',
+  '2c37f355-2403-42c9-8285-6d67f5813369': 'Ophthalmology',
+  '90e6ba9a-c5a5-4dde-ad01-20a20993e8b1': 'Dentistry',
   'd7449fff-9c92-4b91-8291-8cb4bff3628d': 'Dermatology',
   '244a8c79-2ffb-4161-acd0-fdc93968527a': 'General Practice',
   'e7ed77e7-faf4-4921-b618-7160b5247bc9': 'Emergency Medicine',

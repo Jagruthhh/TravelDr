@@ -246,7 +246,9 @@ export class PrismaProviderRepository implements ProviderRepository {
     const spokenLanguageCodes = (record.spokenLanguages || []).map(
       (sl: any) => sl.language?.code || '',
     );
-    const specialtyIds = (record.specialties || []).map((s: any) => s.specialtyId);
+    const specialtyIds = (record.specialties || []).map(
+      (s: any) => s.specialty?.name || s.specialtyId,
+    );
 
     const verificationRecord = record.verificationRecord
       ? new VerificationRecord({
