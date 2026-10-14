@@ -27,6 +27,13 @@ enum VerificationStatus {
   SUSPENDED
 }
 
+/// Moderation status for patient reviews.
+enum ReviewStatus {
+  PENDING_MODERATION
+  APPROVED
+  HIDDEN
+}
+
 /// Discriminator for the HealthcareProvider hierarchy.
 enum ProviderType {
   HOSPITAL
@@ -520,11 +527,14 @@ model Appointment {
 /// Traveler feedback and star rating for a healthcare provider.
 /// isVerifiedPatient is automatically set to true when tied to a completed appointment.
 model Review {
-  id                String  @id @default(uuid())
-  rating            Int     // 1-5 stars; validated in the application layer
+  id                String       @id @default(uuid())
+  rating            Int          // 1-5 stars; validated in the application layer
   comment           String
-  languageUsed      String  @db.VarChar(10)
-  isVerifiedPatient Boolean @default(false)
+  languageUsed      String       @default("en") @db.VarChar(10)
+  isVerifiedPatient Boolean      @default(true)
+  isVerifiedVisit   Boolean      @default(true)
+  verificationBadge String       @default("Verified visit")
+  status            ReviewStatus @default(PENDING_MODERATION)
 
   travelerId String
   traveler   Traveler @relation(fields: [travelerId], references: [id])
@@ -536,10 +546,16 @@ model Review {
   appointmentId String?      @unique
   appointment   Appointment? @relation(fields: [appointmentId], references: [id])
 
+  // One review per helpline case (optional link enforces uniqueness per visit).
+  caseId String?       @unique
+  case   HelplineCase? @relation(fields: [caseId], references: [id])
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([providerId])
   @@index([travelerId])
+  @@index([status])
   @@map("reviews")
 }
 
@@ -577,6 +593,7 @@ model HelplineCase {
   updatedAt DateTime @updatedAt
 
   messages Message[]
+  review   Review?
 
   @@index([cityId])
   @@index([preferredLanguageCode])

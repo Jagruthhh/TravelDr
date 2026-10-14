@@ -8,10 +8,15 @@ import {
   GetProvidersQuery,
   GetProviderDetailQuery,
   UpdateProviderVerificationRequest,
+  CreateProviderRequest,
   Provider,
   CreateCaseRequest,
   UpdateCaseStatusRequest,
   HelplineCaseResponse,
+  Review,
+  ReviewStatus,
+  CreateReviewRequest,
+  ModerateReviewResponse,
 } from '../types/api';
 
 /**
@@ -310,6 +315,24 @@ export class ApiClient {
     );
   }
 
+  /**
+   * POST /providers
+   * Creates a new healthcare provider with status PENDING.
+   * Requires ADMIN role.
+   *
+   * @param data - CreateProviderRequest
+   */
+  public async createProvider(
+    data: CreateProviderRequest,
+    options?: RequestOptions,
+  ): Promise<Provider> {
+    return this.request<Provider>('/providers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    });
+  }
+
   // ─── Helpline Case Endpoints ─────────────────────────────────────────────────
 
   /**
@@ -379,6 +402,81 @@ export class ApiClient {
     });
   }
 
+  // ─── Review Methods ──────────────────────────────────────────────────────────
+
+  /**
+   * GET /reviews
+   * Retrieves reviews optionally filtered by providerId and status.
+   */
+  public async getReviews(
+    params?: { providerId?: string; status?: ReviewStatus },
+    options?: RequestOptions,
+  ): Promise<Review[]> {
+    return this.request<Review[]>('/reviews', {
+      method: 'GET',
+      params: params as any,
+      ...options,
+    });
+  }
+
+  /**
+   * POST /reviews
+   * Submits a new review for a RESOLVED case or COMPLETED appointment.
+   * Review is created with status PENDING_MODERATION.
+   */
+  public async createReview(
+    data: CreateReviewRequest,
+    options?: RequestOptions,
+  ): Promise<Review> {
+    return this.request<Review>('/reviews', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    });
+  }
+
+  /**
+   * PATCH /reviews/:id/status
+   * Moderates a review: approves or hides it (Admin only).
+   */
+  public async moderateReview(
+    id: string,
+    status: 'APPROVED' | 'HIDDEN',
+    options?: RequestOptions,
+  ): Promise<ModerateReviewResponse> {
+    return this.request<ModerateReviewResponse>(`/reviews/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+      ...options,
+    });
+  }
+
+  /**
+   * PATCH /reviews/:id/approve (Admin only)
+   */
+  public async approveReview(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<ModerateReviewResponse> {
+    return this.request<ModerateReviewResponse>(`/reviews/${id}/approve`, {
+      method: 'PATCH',
+      ...options,
+    });
+  }
+
+  /**
+   * PATCH /reviews/:id/hide (Admin only)
+   */
+  public async hideReview(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<ModerateReviewResponse> {
+    return this.request<ModerateReviewResponse>(`/reviews/${id}/hide`, {
+      method: 'PATCH',
+      ...options,
+    });
+  }
+
   // ─── Grouped Namespaces (Convenient Fluent API) ──────────────────────────────
 
   public readonly health = {
@@ -405,6 +503,14 @@ export class ApiClient {
     create: this.createCase.bind(this),
     getById: this.getCaseById.bind(this),
     updateStatus: this.updateCaseStatus.bind(this),
+  };
+
+  public readonly reviews = {
+    list: this.getReviews.bind(this),
+    create: this.createReview.bind(this),
+    moderate: this.moderateReview.bind(this),
+    approve: this.approveReview.bind(this),
+    hide: this.hideReview.bind(this),
   };
 }
 

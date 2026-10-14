@@ -6,6 +6,7 @@ import { HelplineService } from './helpline.service';
 import { ProviderSearchService } from './provider-search.service';
 import { NearestRanking, RANKING_STRATEGY } from './ranking';
 import { CostEstimator } from './cost-estimator.service';
+import { ReviewService } from './review.service';
 import {
   SmsNotifier,
   EmailNotifier,
@@ -21,6 +22,7 @@ import {
     HelplineService,
     ProviderSearchService,
     CostEstimator,
+    ReviewService,
     SmsNotifier,
     EmailNotifier,
     NotifierFactory,
@@ -39,6 +41,7 @@ import {
     HelplineService,
     ProviderSearchService,
     CostEstimator,
+    ReviewService,
     SmsNotifier,
     EmailNotifier,
     NotifierFactory,

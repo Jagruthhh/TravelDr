@@ -220,6 +220,23 @@ export abstract class HealthcareProvider {
     this.touch();
   }
 
+  public updateRatings(ratings: number[]): void {
+    this.totalReviews = ratings.length;
+    if (this.totalReviews === 0) {
+      this.averageRating = 0;
+    } else {
+      const sum = ratings.reduce((acc, r) => acc + r, 0);
+      this.averageRating = Math.round((sum / this.totalReviews) * 10) / 10;
+    }
+    this.touch();
+  }
+
+  public setRatingStats(averageRating: number, totalReviews: number): void {
+    this.averageRating = averageRating;
+    this.totalReviews = totalReviews;
+    this.touch();
+  }
+
   protected touch(): void {
     this.updatedAt = new Date();
   }

@@ -1,4 +1,12 @@
-import { PrismaClient, ProviderType, VerificationStatus, Currency } from '@prisma/client';
+import {
+  PrismaClient,
+  ProviderType,
+  VerificationStatus,
+  ReviewStatus,
+  AppointmentStatus,
+  HelplineCaseStatus,
+  Currency,
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -533,7 +541,91 @@ async function main() {
     await prisma.priceEntry.create({ data: entry });
   }
 
-  // 8. Verification summary
+  // 8. Seed Traveler User, Completed Appointment, and Resolved Helpline Case
+  console.log('Seeding traveler user, visit history, and reviews...');
+  const travelerUser = await prisma.user.create({
+    data: {
+      email: 'sarah.jenkins@traveler.com',
+      fullName: 'Sarah Jenkins',
+      phoneNumber: '+447911123456',
+      role: 'TRAVELER',
+      travelerProfile: {
+        create: {
+          homeCountry: 'United Kingdom',
+          emergencyContactName: 'Mark Jenkins',
+          emergencyContactPhone: '+447911987654',
+          emergencyContactRelationship: 'Spouse',
+        },
+      },
+    },
+    include: {
+      travelerProfile: true,
+    },
+  });
+
+  const travelerProfileId = travelerUser.travelerProfile!.id;
+
+  // Completed appointment linked to Apollo Hospital (createdProviders[0])
+  const completedAppt = await prisma.appointment.create({
+    data: {
+      id: 'appt-completed-apollo-01',
+      travelerId: travelerProfileId,
+      providerId: createdProviders[0].id,
+      treatmentId: dermTreatment.id,
+      scheduledAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      completedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      status: AppointmentStatus.COMPLETED,
+      agreedPrice: 1500.0,
+      currency: Currency.INR,
+      preferredLanguageCode: 'en',
+      symptomsDescription: 'Severe contact dermatitis rash on both forearms after hiking',
+    },
+  });
+
+  // Resolved helpline case recommended to Manipal Hospital Goa (createdProviders[1])
+  const resolvedCase = await prisma.helplineCase.create({
+    data: {
+      id: 'case-resolved-manipal-01',
+      travelerId: travelerProfileId,
+      cityId: goa.id,
+      recommendedProviderId: createdProviders[1].id,
+      subject: 'Urgent acute insect reaction consultation',
+      initialDescription: 'Visitor needs immediate English-speaking medical triage in Goa',
+      preferredLanguageCode: 'en',
+      status: HelplineCaseStatus.RESOLVED,
+      resolutionSummary: 'Traveler treated successfully at Manipal Hospital Emergency Room',
+      resolvedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // 9. Seed Reviews:
+  // Approved review on Apollo Hospital tied to completedAppt
+  const approvedReview = await prisma.review.create({
+    data: {
+      id: 'rev-apollo-approved-01',
+      rating: 5,
+      comment: 'Outstanding English-speaking dermatologists and spotlessly clean facility. Transparent billing matched FixMyItch exactly.',
+      languageUsed: 'en',
+      status: ReviewStatus.APPROVED,
+      isVerifiedPatient: true,
+      isVerifiedVisit: true,
+      verificationBadge: 'Verified visit',
+      providerId: createdProviders[0].id,
+      travelerId: travelerProfileId,
+      appointmentId: completedAppt.id,
+    },
+  });
+
+  // Recompute Apollo Hospital's averageRating and totalReviews strictly from approved reviews
+  await prisma.healthcareProvider.update({
+    where: { id: createdProviders[0].id },
+    data: {
+      averageRating: 5.0,
+      totalReviews: 1,
+    },
+  });
+
+  // 10. Verification summary
   const cityCount = await prisma.city.count();
   const providerCount = await prisma.healthcareProvider.count();
   const langCount = await prisma.language.count();

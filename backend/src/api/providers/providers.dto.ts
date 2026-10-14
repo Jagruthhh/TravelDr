@@ -5,9 +5,82 @@ import {
   IsNotEmpty,
   IsEnum,
   IsDateString,
+  IsEmail,
+  IsArray,
+  IsNumber,
+  Min,
+  Max,
+  MinLength,
+  Matches,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
-import { VerificationStatus } from '../../domain';
+import { Transform, Type } from 'class-transformer';
+import { VerificationStatus, ProviderType } from '../../domain';
+
+/**
+ * Request body DTO for POST /providers (admin only).
+ */
+export class CreateProviderDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Provider name is required' })
+  name: string;
+
+  @IsEnum(ProviderType, {
+    message: 'type must be one of: HOSPITAL, CLINIC, DOCTOR',
+  })
+  type: ProviderType;
+
+  @IsString()
+  @IsNotEmpty({ message: 'City is required' })
+  city: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Address is required' })
+  @MinLength(10, { message: 'Address must be at least 10 characters long' })
+  @Matches(/^(?!\s*none\s*$).+/i, { message: 'Address cannot be "none"' })
+  address: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Phone number is required' })
+  phone: string;
+
+  @IsEmail({}, { message: 'A valid email address is required' })
+  email: string;
+
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return value;
+  })
+  @IsArray({ message: 'Languages must be an array of language codes or names' })
+  @IsNotEmpty({ message: 'At least one spoken language is required' })
+  languages: string[];
+
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return value;
+  })
+  @IsArray({ message: 'Specialties must be an array of specialty names or IDs' })
+  @IsNotEmpty({ message: 'At least one specialty is required' })
+  specialties: string[];
+
+  @IsOptional()
+  @IsString()
+  registrationNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  issuingCouncil?: string;
+
+  @IsNotEmpty({ message: 'Consultation fee is required' })
+  @Type(() => Number)
+  @IsNumber({}, { message: 'Consultation fee must be a number' })
+  @Min(0, { message: 'Consultation fee cannot be negative' })
+  @Max(100000, { message: 'Consultation fee cannot exceed 100000' })
+  consultationFee: number;
+}
 
 /**
  * Query parameters for filtering providers in GET /providers.

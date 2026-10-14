@@ -188,6 +188,20 @@ export interface Provider {
   treatmentCostEstimate?: TreatmentEstimateDetail;
 }
 
+export interface CreateProviderRequest {
+  name: string;
+  type: ProviderType | string;
+  city: string;
+  address: string;
+  phone: string;
+  email: string;
+  languages: string[];
+  specialties: string[];
+  registrationNumber?: string;
+  issuingCouncil?: string;
+  consultationFee?: number;
+}
+
 // ─── Case Types ───────────────────────────────────────────────────────────────
 
 export interface CreateCaseRequest {
@@ -227,4 +241,41 @@ export interface HelplineCaseResponse {
   resolvedAt?: string | Date;
   createdAt: string | Date;
   updatedAt: string | Date;
+}
+
+// ─── Review Types ─────────────────────────────────────────────────────────────
+
+export type ReviewStatus = 'PENDING_MODERATION' | 'APPROVED' | 'HIDDEN';
+
+export interface Review {
+  id: string;
+  providerId: string;
+  travelerId: string;
+  rating: number;
+  comment: string;
+  languageUsed?: string;
+  status: ReviewStatus;
+  isVerifiedVisit: boolean;
+  verificationBadge: string;
+  appointmentId?: string;
+  caseId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateReviewRequest {
+  providerId: string;
+  rating: number;
+  comment: string;
+  appointmentId?: string;
+  caseId?: string;
+  languageUsed?: string;
+}
+
+export interface ModerateReviewResponse {
+  review: Review;
+  ratingStats: {
+    averageRating: number;
+    totalReviews: number;
+  };
 }

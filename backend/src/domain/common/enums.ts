@@ -22,6 +22,12 @@ export enum VerificationStatus {
   SUSPENDED = 'SUSPENDED',
 }
 
+export enum ReviewStatus {
+  PENDING_MODERATION = 'PENDING_MODERATION',
+  APPROVED = 'APPROVED',
+  HIDDEN = 'HIDDEN',
+}
+
 export enum ProviderType {
   HOSPITAL = 'HOSPITAL',
   CLINIC = 'CLINIC',

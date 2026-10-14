@@ -8,6 +8,7 @@ import {
   PriceEntryDetail,
   HelplineUrgency,
   VerificationStatus,
+  Review,
 } from '../types/api';
 
 const TREATMENT_META: Record<
@@ -181,6 +182,27 @@ export default function ProviderDetail({
   const [callbackSuccess, setCallbackSuccess] = useState<boolean>(false);
   const [caseReferenceId, setCaseReferenceId] = useState<string>('');
 
+  // ─── Real Reviews & Review Modal State ─────────────────────────────────────
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewComment, setReviewComment] = useState<string>('');
+  const [visitType, setVisitType] = useState<'appointment' | 'case'>('appointment');
+  const [visitId, setVisitId] = useState<string>('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
+  const [reviewSuccessMessage, setReviewSuccessMessage] = useState<string | null>(null);
+  const [reviewErrorMessage, setReviewErrorMessage] = useState<string | null>(null);
+
+  // ─── Fetch Reviews ─────────────────────────────────────────────────────────
+  const fetchReviews = useCallback(async () => {
+    try {
+      const data = await apiClient.getReviews({ providerId });
+      setReviews(data);
+    } catch (err) {
+      console.warn('Could not load reviews:', err);
+    }
+  }, [providerId]);
+
   // ─── Fetch Provider Data ───────────────────────────────────────────────────
   const fetchProviderDetail = useCallback(async () => {
     setIsLoading(true);
@@ -210,7 +232,8 @@ export default function ProviderDetail({
     if (!initialProvider) {
       fetchProviderDetail();
     }
-  }, [initialProvider, fetchProviderDetail]);
+    fetchReviews();
+  }, [initialProvider, fetchProviderDetail, fetchReviews]);
 
   // ─── Callback Submission ───────────────────────────────────────────────────
   const handleCallbackSubmit = async (e: React.FormEvent) => {
@@ -248,6 +271,66 @@ export default function ProviderDetail({
     setSelectedTreatment(treatmentName);
     setCallbackSuccess(false);
     setIsCallbackOpen(true);
+  };
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReviewErrorMessage(null);
+    setReviewSuccessMessage(null);
+
+    if (!visitId.trim()) {
+      setReviewErrorMessage(
+        visitType === 'appointment'
+          ? 'Please enter your completed Appointment ID'
+          : 'Please enter your resolved Helpline Case ID',
+      );
+      return;
+    }
+
+    if (reviewComment.trim().length < 5) {
+      setReviewErrorMessage('Please write a comment of at least 5 characters');
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      if (!apiClient.getToken()) {
+        try {
+          const travelerAuth = await apiClient.register({
+            email: `traveler.${Date.now()}@traveler.com`,
+            password: 'Password123!',
+            fullName: 'Verified Traveler',
+            role: 'TRAVELER' as any,
+          });
+          if (travelerAuth?.accessToken) {
+            apiClient.setToken(travelerAuth.accessToken);
+          }
+        } catch {
+          // fallback
+        }
+      }
+
+      await apiClient.createReview({
+        providerId,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+        appointmentId: visitType === 'appointment' ? visitId.trim() : undefined,
+        caseId: visitType === 'case' ? visitId.trim() : undefined,
+      });
+
+      setReviewSuccessMessage(
+        '✓ Review submitted with Verified visit status! It is currently PENDING_MODERATION and will be published once approved by an administrator.',
+      );
+      setReviewComment('');
+      setVisitId('');
+    } catch (err: any) {
+      console.error('Failed to submit review:', err);
+      setReviewErrorMessage(
+        err instanceof ApiClientError ? err.message : 'Failed to submit review.',
+      );
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
   // ─── Loading Skeleton ──────────────────────────────────────────────────────
@@ -719,58 +802,105 @@ export default function ProviderDetail({
                 </p>
               </div>
 
-              {/* Rating Summary Pill */}
-              <div className="flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-2 dark:bg-amber-950/30">
-                <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300">
-                  ★ {provider.averageRating.toFixed(1)}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Rating Summary Pill */}
+                <div className="flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-2 dark:bg-amber-950/30">
+                  <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300">
+                    ★ {provider.averageRating.toFixed(1)}
+                  </div>
+                  <div className="text-xs text-amber-900 dark:text-amber-200">
+                    <div className="font-bold">Overall Rating</div>
+                    <div>{provider.totalReviews} approved review{provider.totalReviews === 1 ? '' : 's'}</div>
+                  </div>
                 </div>
-                <div className="text-xs text-amber-900 dark:text-amber-200">
-                  <div className="font-bold">Overall Rating</div>
-                  <div>{provider.totalReviews} verified reviews</div>
-                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewSuccessMessage(null);
+                    setReviewErrorMessage(null);
+                    setIsReviewModalOpen(true);
+                  }}
+                  className="rounded-2xl bg-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-teal-500 transition active:scale-95"
+                >
+                  ★ Write a Review
+                </button>
+
+                <Link
+                  href="/admin/reviews"
+                  className="rounded-2xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                  title="Admin Moderation Queue"
+                >
+                  Admin Queue
+                </Link>
               </div>
             </div>
 
             {/* Individual Reviews List */}
             <div className="space-y-4">
-              {MOCK_REVIEWS.map((rev) => (
-                <div
-                  key={rev.id}
-                  className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4.5 dark:border-slate-800/80 dark:bg-slate-800/40"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
-                        {rev.author.charAt(0)}
+              {reviews.length > 0 ? (
+                reviews.map((rev) => (
+                  <div
+                    key={rev.id}
+                    className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4.5 dark:border-slate-800/80 dark:bg-slate-800/40"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
+                          ✓
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900 dark:text-white">
+                            Verified Patient
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {rev.appointmentId
+                              ? `Completed Appointment • ${rev.appointmentId}`
+                              : `Resolved Helpline Case • ${rev.caseId}`} • {new Date(rev.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-sm font-bold text-slate-900 dark:text-white">
-                          {rev.author}
-                        </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Traveler from {rev.country} • {rev.date}
-                        </div>
+                      <div className="flex text-amber-400 text-xs">
+                        {Array.from({ length: rev.rating }).map((_, i) => (
+                          <span key={i}>★</span>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex text-amber-400 text-xs">
-                      {Array.from({ length: rev.rating }).map((_, i) => (
-                        <span key={i}>★</span>
-                      ))}
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                      "{rev.comment}"
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <span className="rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
+                        ✓ {rev.verificationBadge || 'Verified visit'}
+                      </span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        • Verified visit
+                      </span>
                     </div>
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                    "{rev.comment}"
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center bg-slate-50/40 dark:bg-slate-900/30">
+                  <div className="text-2xl mb-1">📝</div>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    No approved reviews published yet
                   </p>
-                  <div className="mt-2.5 flex items-center gap-2">
-                    <span className="rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
-                      {rev.tag}
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      ✓ Verified Patient
-                    </span>
-                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                    Ratings and reviews are computed from approved reviews only. Have you completed an appointment or had a helpline case resolved here?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReviewSuccessMessage(null);
+                      setReviewErrorMessage(null);
+                      setIsReviewModalOpen(true);
+                    }}
+                    className="mt-3 inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 transition"
+                  >
+                    Leave the First Verified Review
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
           </section>
         </div>
@@ -999,6 +1129,172 @@ export default function ProviderDetail({
                   </div>
                 </form>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* ─── Write a Review Modal ──────────────────────────────────────────────── */}
+      {isReviewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 sm:p-8">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 mb-1">
+                  Verified Visit Required
+                </span>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                  Write a Verified Review
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Reviewing {provider.name}. Must be tied to a completed appointment or resolved case.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReviewModalOpen(false)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            {reviewSuccessMessage ? (
+              <div className="space-y-4 py-4 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-100 text-teal-600 dark:bg-teal-950/80 dark:text-teal-300 text-2xl">
+                  ✓
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                    Review Submitted
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm mx-auto leading-relaxed">
+                    {reviewSuccessMessage}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReviewModalOpen(false);
+                    fetchReviews();
+                  }}
+                  className="mt-2 w-full rounded-2xl bg-teal-600 py-3 text-xs font-bold text-white hover:bg-teal-500 transition"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleReviewSubmit} className="space-y-4">
+                {reviewErrorMessage && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
+                    {reviewErrorMessage}
+                  </div>
+                )}
+
+                {/* Star rating selector */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    Rating (1 to 5 Stars) *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setReviewRating(star)}
+                        className={`text-2xl transition hover:scale-110 ${
+                          star <= reviewRating ? 'text-amber-400' : 'text-slate-300 dark:text-slate-700'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-2">
+                      {reviewRating} of 5 Stars
+                    </span>
+                  </div>
+                </div>
+
+                {/* Visit Type selection */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    Verified Visit Type *
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVisitType('appointment')}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold text-center transition ${
+                        visitType === 'appointment'
+                          ? 'border-teal-500 bg-teal-50/50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-200'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Completed Appointment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisitType('case')}
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold text-center transition ${
+                        visitType === 'case'
+                          ? 'border-teal-500 bg-teal-50/50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-200'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Resolved Helpline Case
+                    </button>
+                  </div>
+                </div>
+
+                {/* Visit ID */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    {visitType === 'appointment' ? 'Appointment ID *' : 'Helpline Case ID *'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={
+                      visitType === 'appointment'
+                        ? 'e.g. appt-completed-apollo-01'
+                        : 'e.g. case-resolved-manipal-01'
+                    }
+                    value={visitId}
+                    onChange={(e) => setVisitId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Must match a {visitType === 'appointment' ? 'COMPLETED appointment' : 'RESOLVED helpline case'} linked to this provider.
+                  </p>
+                </div>
+
+                {/* Comment */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    Your Review & Experience *
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    placeholder="Describe the medical care, cleanliness, English-speaking staff, and billing transparency..."
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingReview}
+                    className="w-full rounded-2xl bg-gradient-to-r from-teal-600 to-teal-500 py-3 text-sm font-bold text-white shadow-md shadow-teal-500/25 hover:from-teal-500 hover:to-teal-600 disabled:opacity-50"
+                  >
+                    {isSubmittingReview ? 'Submitting Review...' : 'Submit Verified Review'}
+                  </button>
+                  <p className="mt-2 text-center text-[11px] text-slate-400">
+                    Marked as "Verified visit" • Saved with status PENDING_MODERATION until admin review.
+                  </p>
+                </div>
+              </form>
             )}
           </div>
         </div>

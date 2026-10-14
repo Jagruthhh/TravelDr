@@ -115,10 +115,28 @@ export class PrismaProviderRepository implements ProviderRepository {
     const id = provider.getId();
     const type = provider.getType();
 
+    let cityId = provider.getCityId();
+    const cityRecord = await this.prisma.city.findFirst({
+      where: {
+        OR: [
+          { id: cityId },
+          { name: { contains: cityId, mode: 'insensitive' } },
+        ],
+      },
+    });
+    if (cityRecord) {
+      cityId = cityRecord.id;
+    } else {
+      const defaultCity = await this.prisma.city.findFirst();
+      if (defaultCity) {
+        cityId = defaultCity.id;
+      }
+    }
+
     const baseData = {
       name: provider.getName(),
       type: type as any,
-      cityId: provider.getCityId(),
+      cityId,
       address: provider.getAddress(),
       contactNumber: provider.getContactNumber(),
       email: provider.getEmail(),
@@ -228,6 +246,104 @@ export class PrismaProviderRepository implements ProviderRepository {
           expiresAt: vRecord.getExpiresAt(),
         },
       });
+    }
+
+    // Save spoken languages if provided
+    const languageCodes = provider.getSpokenLanguageCodes();
+    if (languageCodes.length > 0) {
+      for (const lang of languageCodes) {
+        const langRecord = await this.prisma.language.findFirst({
+          where: {
+            OR: [
+              { code: lang.toLowerCase().trim() },
+              { name: { equals: lang.trim(), mode: 'insensitive' } },
+              { id: lang.trim() },
+            ],
+          },
+        });
+        if (langRecord) {
+          await this.prisma.providerLanguage.upsert({
+            where: {
+              providerId_languageId: {
+                providerId: id,
+                languageId: langRecord.id,
+              },
+            },
+            create: {
+              providerId: id,
+              languageId: langRecord.id,
+            },
+            update: {},
+          });
+        }
+      }
+    }
+
+    // Save specialties if provided
+    const specialties = provider.getSpecialtyIds();
+    if (specialties.length > 0) {
+      for (const spec of specialties) {
+        const specRecord = await this.prisma.specialty.findFirst({
+          where: {
+            OR: [
+              { id: spec.trim() },
+              { name: { equals: spec.trim(), mode: 'insensitive' } },
+            ],
+          },
+        });
+        if (specRecord) {
+          await this.prisma.providerSpecialty.upsert({
+            where: {
+              providerId_specialtyId: {
+                providerId: id,
+                specialtyId: specRecord.id,
+              },
+            },
+            create: {
+              providerId: id,
+              specialtyId: specRecord.id,
+            },
+            update: {},
+          });
+        }
+      }
+    }
+
+    // Save price entries if provided
+    const priceEntries = provider.getPriceEntries();
+    if (priceEntries.length > 0) {
+      const defaultTreatment = await this.prisma.treatment.findFirst();
+      for (const pe of priceEntries) {
+        const treatmentId = pe.getTreatmentId();
+        const validTreatment = await this.prisma.treatment.findUnique({
+          where: { id: treatmentId },
+        });
+        const targetTreatmentId = validTreatment ? treatmentId : defaultTreatment?.id;
+        if (targetTreatmentId) {
+          await this.prisma.priceEntry.upsert({
+            where: { id: pe.getId() },
+            create: {
+              id: pe.getId(),
+              providerId: id,
+              treatmentId: targetTreatmentId,
+              amount: pe.getAmount(),
+              currency: pe.getCurrency() as any,
+              isEstimate: pe.getIsEstimate(),
+              minAmount: pe.getMinPrice() ?? undefined,
+              maxAmount: pe.getMaxPrice() ?? undefined,
+              notes: 'Standard consultation fee',
+              effectiveFrom: new Date(),
+            },
+            update: {
+              amount: pe.getAmount(),
+              currency: pe.getCurrency() as any,
+              isEstimate: pe.getIsEstimate(),
+              minAmount: pe.getMinPrice() ?? undefined,
+              maxAmount: pe.getMaxPrice() ?? undefined,
+            },
+          });
+        }
+      }
     }
   }
 

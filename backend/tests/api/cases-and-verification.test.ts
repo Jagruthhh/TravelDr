@@ -523,4 +523,169 @@ describe('Cases API & Provider Verification API', () => {
       );
     });
   });
+
+  // ─── 5. POST /providers (Admin Only) ───────────────────────────────────────
+
+  describe('POST /providers (Admin Only)', () => {
+    const validPayload = {
+      name: 'Lotus Wellness & Skin Clinic',
+      type: 'CLINIC',
+      city: 'hyderabad',
+      address: 'Road No 36, Jubilee Hills, Hyderabad',
+      phone: '+919876543210',
+      email: 'contact@lotusclinic.com',
+      languages: ['en', 'hi', 'te'],
+      specialties: ['Dermatology', 'General Practice'],
+      registrationNumber: 'TS-CL-2026-99120',
+      issuingCouncil: 'Telangana State Medical Council',
+      consultationFee: 750,
+    };
+
+    it('rejects unauthenticated request with 401 Unauthorized', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .send(validPayload);
+
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects non-admin role (TRAVELER) with 403 Forbidden', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${travelerToken}`)
+        .send(validPayload);
+
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain('Access denied: requires one of roles [ADMIN]');
+    });
+
+    it('validates required fields and returns 400 Bad Request on empty payload', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Provider name is required'),
+          expect.stringContaining('City is required'),
+          expect.stringContaining('Address is required'),
+        ]),
+      );
+    });
+
+    it('validates email format and rejects invalid emails with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...validPayload, email: 'not-an-email' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toEqual(
+        expect.arrayContaining([expect.stringContaining('valid email address is required')]),
+      );
+    });
+
+    it('allows ADMIN to create a provider and saves it with status PENDING', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(validPayload);
+
+      expect(res.status).toBe(201);
+      expect(res.body.name).toBe(validPayload.name);
+      expect(res.body.isVerified).toBe(false);
+      expect(res.body.verificationStatus).toBe(VerificationStatus.PENDING);
+      expect(res.body.registrationNumber).toBe(validPayload.registrationNumber);
+      expect(res.body.issuingCouncil).toBe(validPayload.issuingCouncil);
+
+      // Verify provider was persisted in repository
+      const savedProvider = await mockProviderRepo.findById(res.body.id);
+      expect(savedProvider).toBeDefined();
+      expect(savedProvider?.getName()).toBe(validPayload.name);
+      expect(savedProvider?.isVerified()).toBe(false);
+      expect(savedProvider?.getVerificationStatus()).toBe(VerificationStatus.PENDING);
+      expect(savedProvider?.getVerificationRecord()?.getRegistrationNumber()).toBe(
+        validPayload.registrationNumber,
+      );
+      expect(savedProvider?.getVerificationRecord()?.getIssuingCouncil()).toBe(
+        validPayload.issuingCouncil,
+      );
+    });
+
+    it('rejects duplicate provider submission with the same name and address', async () => {
+      // First submission succeeds
+      const uniquePayload = {
+        ...validPayload,
+        name: 'Apollo Jubilee Clinic',
+        address: 'Plot 10, Road No 36, Jubilee Hills',
+      };
+
+      const res1 = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(uniquePayload);
+      expect(res1.status).toBe(201);
+
+      // Second submission with same name and address must be rejected
+      const res2 = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(uniquePayload);
+      expect(res2.status).toBe(409);
+      expect(res2.body.message).toContain('already exists');
+    });
+
+    it('rejects an address that is less than 10 characters', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...validPayload, name: 'Unique Clinic A', address: 'Short Rd' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toEqual(
+        expect.arrayContaining([expect.stringContaining('Address must be at least 10 characters long')]),
+      );
+    });
+
+    it('rejects an address that is "none"', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...validPayload, name: 'Unique Clinic B', address: 'none' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/cannot be "none"|minimum 10 characters/i),
+        ]),
+      );
+    });
+
+    it('rejects consultation fee of 800850 (> 100000)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...validPayload, name: 'Unique Clinic C', consultationFee: 800850 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toEqual(
+        expect.arrayContaining([expect.stringContaining('Consultation fee cannot exceed 100000')]),
+      );
+    });
+
+    it('rejects negative consultation fee (< 0)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/providers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ ...validPayload, name: 'Unique Clinic D', consultationFee: -50 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toEqual(
+        expect.arrayContaining([expect.stringContaining('Consultation fee cannot be negative')]),
+      );
+    });
+  });
 });
+

@@ -2,6 +2,9 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
+  HttpCode,
+  HttpStatus,
   Body,
   Param,
   Query,
@@ -9,6 +12,8 @@ import {
   UseGuards,
   UsePipes,
   ValidationPipe,
+  ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ProviderSearchService,
@@ -17,7 +22,12 @@ import {
 } from '../../services';
 import {
   HealthcareProvider,
+  Hospital,
+  Clinic,
+  Doctor,
   PriceEntry,
+  Currency,
+  ProviderType,
   VerificationRecord,
   VerificationStatus,
   UserRole,
@@ -27,6 +37,7 @@ import {
   GetProviderDetailQueryDto,
   ProviderIdParamDto,
   UpdateProviderVerificationDto,
+  CreateProviderDto,
   ProviderResponseDto,
   ProviderCostRangeDto,
   PriceEntryDto,
@@ -82,6 +93,133 @@ export class ProvidersController {
   ): Promise<ProviderResponseDto> {
     const provider = await this.providerService.getProviderById(params.id);
     return this.mapToResponseDto(provider, query.treatmentId, true);
+  }
+
+  /**
+   * POST /providers (Admin only)
+   * Creates a new healthcare provider with status PENDING.
+   */
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async createProvider(
+    @Body() dto: CreateProviderDto,
+    @Req() req: any,
+  ): Promise<ProviderResponseDto> {
+    const trimmedAddress = dto.address?.trim() || '';
+    if (trimmedAddress.length < 10 || trimmedAddress.toLowerCase() === 'none') {
+      throw new BadRequestException(
+        'Address must be a real physical address (minimum 10 characters, cannot be "none")',
+      );
+    }
+
+    const fee = Number(dto.consultationFee);
+    if (
+      dto.consultationFee === undefined ||
+      dto.consultationFee === null ||
+      isNaN(fee) ||
+      fee < 0 ||
+      fee > 100000
+    ) {
+      throw new BadRequestException(
+        'Consultation fee must be a number between 0 and 100000',
+      );
+    }
+
+    // Reject duplicate (same name + address)
+    const normalizedName = dto.name.trim().toLowerCase();
+    const normalizedAddress = trimmedAddress.toLowerCase();
+    const existing = await this.providerService.searchProviders();
+    const isDuplicate = existing.some(
+      (p) =>
+        p.getName().trim().toLowerCase() === normalizedName &&
+        p.getAddress().trim().toLowerCase() === normalizedAddress,
+    );
+    if (isDuplicate) {
+      throw new ConflictException(
+        `A provider with the name "${dto.name}" and address "${dto.address}" already exists`,
+      );
+    }
+
+    const providerId = `provider-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const phone = dto.phone?.trim();
+
+    const baseParams = {
+      id: providerId,
+      name: dto.name.trim(),
+      type: dto.type,
+      cityId: dto.city.trim(),
+      address: trimmedAddress,
+      contactNumber: phone,
+      email: dto.email.trim().toLowerCase(),
+      spokenLanguageCodes: dto.languages,
+      specialtyIds: dto.specialties,
+      averageRating: 0,
+      totalReviews: 0,
+      isActive: true,
+    };
+
+    let provider: HealthcareProvider;
+    if (dto.type === ProviderType.HOSPITAL) {
+      provider = new Hospital({
+        ...baseParams,
+        emergencyDepartment24x7: true,
+        totalInpatientBeds: 50,
+        ambulanceServiceAvailable: true,
+      });
+    } else if (dto.type === ProviderType.CLINIC) {
+      provider = new Clinic({
+        ...baseParams,
+        allowsWalkIns: true,
+        appointmentRequired: false,
+        operatingHoursDescription: '09:00 - 18:00',
+        offersTelehealth: true,
+      });
+    } else {
+      provider = new Doctor({
+        ...baseParams,
+        medicalLicenseNumber: dto.registrationNumber || 'PENDING',
+        yearsOfExperience: 5,
+        professionalTitle: 'Dr.',
+        acceptsEmergencyCalls: false,
+      });
+    }
+
+    const verificationRecord = new VerificationRecord({
+      id: `vr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      providerId: provider.getId(),
+      licenseDocumentUrl: 'https://verified.traveldr.internal/pending-license.pdf',
+      status: VerificationStatus.PENDING,
+      registrationNumber: dto.registrationNumber?.trim(),
+      issuingCouncil: dto.issuingCouncil?.trim(),
+      notes: 'Provider created via admin onboarding - pending verification',
+      verificationNotes: 'Provider created via admin onboarding - pending verification',
+    });
+    provider.attachVerificationRecord(verificationRecord);
+
+    if (
+      dto.consultationFee !== undefined &&
+      dto.consultationFee !== null &&
+      !isNaN(Number(dto.consultationFee))
+    ) {
+      const fee = Number(dto.consultationFee);
+      const priceEntry = new PriceEntry({
+        id: `pe-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        providerId: provider.getId(),
+        treatmentId: 'treatment-general-consultation',
+        amount: fee,
+        currency: Currency.INR,
+        isEstimate: false,
+        minAmount: fee,
+        maxAmount: fee,
+        notes: 'Standard consultation fee',
+      });
+      provider.addPriceEntry(priceEntry);
+    }
+
+    await this.providerService.registerProvider(provider);
+    return this.mapToResponseDto(provider, undefined, true);
   }
 
   /**
